@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "ic-http-core"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Long Tran <tranbaolong14@gmail.com>"]
+license = "MIT"
