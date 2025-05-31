@@ -1,31 +1,17 @@
-use std::{future::Future, pin::Pin};
-
-// Unit tests for Server
 use ic_http_certification::{HttpRequest, HttpResponse, Method};
 
-use crate::{Handler, Server};
+use crate::Server;
 
-struct TestHandler;
+#[test]
+fn test_server_query_route_and_handle() {
+    let server = Server::new().query_route("default", "/hello", |req, _params| {
+        HttpResponse::ok(
+            b"Hello, World!",
+            vec![("Content-Type".into(), "text/plain".into())],
+        )
+        .build()
+    });
 
-impl Handler for TestHandler {
-    fn call(
-        &self,
-        _req: &HttpRequest<'_>,
-    ) -> Pin<Box<dyn Future<Output = HttpResponse<'_>> + Send + 'static>> {
-        let fut = async move {
-            HttpResponse::ok(
-                b"Hello, World!",
-                vec![("Content-Type".into(), "text/plain".into())],
-            )
-            .build()
-        };
-        Box::pin(fut)
-    }
-}
-
-#[tokio::test]
-async fn test_server_route_and_handle() {
-    let server = Server::new().route("/hello", Method::GET, TestHandler);
     let req = HttpRequest::builder()
         .with_method(Method::GET)
         .with_url("/hello")
@@ -33,9 +19,45 @@ async fn test_server_route_and_handle() {
         .with_body(&[1, 2, 3])
         .with_certificate_version(2)
         .build();
-    let res = server.handle(req).await;
-    assert!(res.is_ok());
-    let resp = res.unwrap();
-    assert_eq!(resp.status_code(), 200);
-    assert_eq!(resp.body(), b"Hello, World!");
+
+    let res = server.query_handle(&req);
+    assert_eq!(res.status_code(), 200);
+    assert_eq!(res.body(), b"Hello, World!");
+}
+
+#[test]
+fn test_server_query_route_not_found() {
+    let server = Server::new().query_route("default", "/hello", |_, _| {
+        HttpResponse::ok(b"Hello, World!", vec![]).build()
+    });
+
+    let req = HttpRequest::builder()
+        .with_method(Method::GET)
+        .with_url("/not-exist")
+        .build();
+
+    let res = server.query_handle(&req);
+    assert_eq!(res.status_code(), 404);
+    assert_eq!(res.body(), b"Not Found!");
+}
+
+#[test]
+fn test_server_query_custom_fallback() {
+    use crate::RouteHandler;
+    use ic_http_certification::HttpResponse;
+    let custom_fallback: RouteHandler = |_, _| HttpResponse::ok(b"Custom Fallback", vec![]).build();
+    let server = Server::new()
+        .query_route("default", "/hello", |_, _| {
+            HttpResponse::ok(b"Hello, World!", vec![]).build()
+        })
+        .with_fallback(custom_fallback);
+
+    let req = HttpRequest::builder()
+        .with_method(Method::GET)
+        .with_url("/not-exist")
+        .build();
+
+    let res = server.query_handle(&req);
+    assert_eq!(res.status_code(), 200);
+    assert_eq!(res.body(), b"Custom Fallback");
 }

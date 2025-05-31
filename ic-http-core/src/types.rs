@@ -1,13 +1,12 @@
 pub use ic_http_certification::{HttpRequest, HttpResponse, HttpResponseBuilder};
+use matchit::Params;
 use std::future::Future;
 use std::pin::Pin;
-pub trait Service<Request> {
-    type Response;
-    type Error;
-    type Future: std::future::Future<Output = Result<Self::Response, Self::Error>> + Send + 'static;
-    fn call(&mut self, req: Request) -> Self::Future;
-}
 
-pub trait Handler: Send + Sync {
-    fn call(&self, req: &HttpRequest) -> Pin<Box<dyn Future<Output = HttpResponse> + Send>>;
-}
+pub type RouteHandler = for<'a> fn(&'a HttpRequest, &'a Params) -> HttpResponse<'static>;
+
+pub type RouteHandlerAsync =
+    for<'a> fn(
+        &'a HttpRequest,
+        &'a Params,
+    ) -> Pin<Box<dyn Future<Output = HttpResponse<'static>> + Send + 'a>>;
