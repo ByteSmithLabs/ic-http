@@ -1,6 +1,6 @@
 use ic_cdk::{init, post_upgrade, pre_upgrade};
 use ic_http::{HttpRequest, HttpResponse, RouteHandler, Server, ServerConfig};
-use ic_http_certification::Method;
+use ic_http_certification::{Method, StatusCode};
 use matchit::Router;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -10,6 +10,30 @@ thread_local! {
     static UPDATE_ROUTER: RefCell<HashMap<String, Router<RouteHandler>>> = RefCell::new(HashMap::new());
 }
 
+// register handler modules
+mod handlers;
+
+pub(crate) fn create_response(status_code: StatusCode, body: Vec<u8>) -> HttpResponse<'static> {
+    HttpResponse::builder()
+        .with_status_code(status_code)
+        .with_headers(vec![
+            ("content-type".to_string(), "application/json".to_string()),
+            (
+                "strict-transport-security".to_string(),
+                "max-age=31536000; includeSubDomains".to_string(),
+            ),
+            ("x-content-type-options".to_string(), "nosniff".to_string()),
+            ("referrer-policy".to_string(), "no-referrer".to_string()),
+            (
+                "cache-control".to_string(),
+                "no-store, max-age=0".to_string(),
+            ),
+            ("pragma".to_string(), "no-cache".to_string()),
+        ])
+        .with_body(body)
+        .build()
+}
+
 fn define_routers() {
     QUERY_ROUTER.with(|router_cell| {
         let mut routers = router_cell.borrow_mut();
@@ -17,13 +41,8 @@ fn define_routers() {
             .entry(Method::GET.to_string())
             .or_insert_with(Router::new);
 
-        router
-            .insert("/ping", |_, _| {
-                HttpResponse::ok(b"pong", vec![])
-                    .with_upgrade(false)
-                    .build()
-            })
-            .ok();
+        router.insert("/ping", handlers::ping).ok();
+        router.insert("/test", handlers::test).ok();
         // Add more query routes here as needed
     });
 
@@ -32,18 +51,16 @@ fn define_routers() {
         let router = routers
             .entry(Method::POST.to_string())
             .or_insert_with(Router::new);
-        router
-            .insert("/hello", |_, _| {
-                HttpResponse::ok(b"ping", vec![]).with_upgrade(true).build()
-            })
-            .ok();
+        router.insert("/hello", handlers::hello).ok();
         // Add more update routes here as needed
     });
 }
 
-#[ic_cdk::update]
+#[ic_cdk::query]
 fn http_request(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let mut server = Server::new();
+
+    ic_cdk::println!("Received request: {:?}", req);
     server.config(ServerConfig {
         query_router: Some(RefCell::new(
             QUERY_ROUTER.with(|cell| cell.borrow().clone()),
@@ -83,15 +100,6 @@ fn test(url: String) -> HttpResponse<'static> {
     });
 
     let res = server.query_handle(&req);
-
-    ic_cdk::println!("--- Query Routers ---");
-    for (method, router) in server.query_router.borrow().iter() {
-        ic_cdk::println!("Query: {} {:?}", method, router);
-    }
-    ic_cdk::println!("--- Update Routers ---");
-    for (method, router) in server.update_router.borrow().iter() {
-        ic_cdk::println!("Update: {} {:?}", method, router);
-    }
 
     res
 }

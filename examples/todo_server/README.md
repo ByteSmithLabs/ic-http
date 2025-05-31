@@ -38,5 +38,6 @@ https://<CANISTER_ID>.icp0.io/hello
 
 ```
 curl -s \
-    "http://$(dfx canister id http_server).localhost:$(dfx info webserver-port)/hello"
+    "http://$(dfx canister id http_server).localhost:$(dfx info webserver-port)/ping" \
+    --resolve "$(dfx canister id http_server).localhost:$(dfx info webserver-port):127.0.0.1"
 ```
