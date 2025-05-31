@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = [ 
     "ic-http-core"
 ]
 resolver = "2"

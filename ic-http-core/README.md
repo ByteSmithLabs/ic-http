@@ -62,6 +62,44 @@ fn main() {
 }
 ```
 
+## Router Usage
+
+You can use the built-in `Router` to register exact and prefix-based routes in your canister.
+
+```rust
+use ic_http::{Router};
+use ic_http::{HttpRequest, HttpResponse};
+
+// Example handler functions
+fn handle_hello(req: HttpRequest) -> HttpResponse {
+    HttpResponseBuilder::ok()
+        .header("Content-Type", "text/plain")
+        .body("Hello, World!")
+        .build()
+}
+
+fn handle_api(req: HttpRequest) -> HttpResponse {
+    // handle all paths under /api
+    HttpResponseBuilder::ok()
+        .header("Content-Type", "application/json")
+        .body("{ \"api\": true }")
+        .build()
+}
+
+// Create a router and register routes
+let router = Router::new()
+    .route("/hello", handle_hello)       // exact match
+    .prefix("/api", handle_api);         // prefix match
+
+// Dispatch requests
+#[query]
+fn http_request(req: HttpRequest) -> HttpResponse {
+    router.handle_request(req)
+}
+```
+
+This will dispatch `/hello` to `handle_hello` and any path starting with `/api` to `handle_api`. If no route matches, a 404 Not Found response is returned.
+
 ## Components
 
 ### HttpServer Trait

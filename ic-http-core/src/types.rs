@@ -1,19 +1,13 @@
-use ic_http_certification::Method;
+pub use ic_http_certification::{HttpRequest, HttpResponse, HttpResponseBuilder};
+use std::future::Future;
+use std::pin::Pin;
+pub trait Service<Request> {
+    type Response;
+    type Error;
+    type Future: std::future::Future<Output = Result<Self::Response, Self::Error>> + Send + 'static;
+    fn call(&mut self, req: Request) -> Self::Future;
+}
 
-use crate::HandlerFn;
-
-/// Route definition
-///
-/// Represents a route in the HTTP server with a path, HTTP method, and handler function.
-///
-/// # Fields
-///
-/// * `path` - The URL path for this route (e.g., "/api/users")
-/// * `method` - The HTTP method for this route
-/// * `handler` - The function that will be called to handle requests to this route
-#[derive(Debug, Clone)]
-pub struct Route<'a> {
-    pub path: String,
-    pub method: Method,
-    pub handler: HandlerFn<'a>,
+pub trait Handler: Send + Sync {
+    fn call(&self, req: &HttpRequest) -> Pin<Box<dyn Future<Output = HttpResponse> + Send>>;
 }
