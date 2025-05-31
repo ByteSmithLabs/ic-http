@@ -1,0 +1,17 @@
+{
+  "canisters": {
+    "http_server": {
+      "candid": "http_server.did",
+      "package": "http_server",
+      "type": "rust"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}

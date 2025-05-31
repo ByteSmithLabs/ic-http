@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ic_http_certification::{HttpRequest, HttpResponse};
+use ic_http_certification::{HttpRequest, HttpResponse, Method};
 use std::cell::RefCell;
 
 use crate::RouteHandler;
@@ -12,13 +12,12 @@ thread_local! {
     static UPDATE_ROUTER: RefCell<HashMap<String, Router<RouteHandler>>> = RefCell::new(HashMap::new());
 }
 
-/// Simple HTTP server with unified routing
+#[derive(Clone)]
 pub struct Server {
     fallback: RouteHandler,
 }
 
 impl Server {
-    /// Create a new HTTP server with a default fallback handler
     pub fn new() -> Self {
         fn default_fallback(
             _req: &HttpRequest,
@@ -42,7 +41,7 @@ impl Server {
     }
 
     /// Register a query route
-    pub fn query_route(self, method: &str, path: &str, handler: RouteHandler) -> Self {
+    pub fn query_route(self, method: &Method, path: &str, handler: RouteHandler) -> Self {
         QUERY_ROUTER.with(|routers| {
             let mut routers = routers.borrow_mut();
             let router = routers
@@ -54,7 +53,7 @@ impl Server {
     }
 
     /// Register an update route
-    pub fn update_route(self, method: &str, path: &str, handler: RouteHandler) -> Self {
+    pub fn update_route(self, method: &Method, path: &str, handler: RouteHandler) -> Self {
         UPDATE_ROUTER.with(|routers| {
             let mut routers = routers.borrow_mut();
             let router = routers
