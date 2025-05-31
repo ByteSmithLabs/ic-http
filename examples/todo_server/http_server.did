@@ -11,7 +11,8 @@ type HttpResponse = record {
   upgrade : opt bool;
   status_code : nat16;
 };
-service : {
-  http_request : (HttpRequest) -> (HttpResponse) query;
+service : () -> {
+  http_request : (HttpRequest) -> (HttpResponse);
   http_request_update : (HttpRequest) -> (HttpResponse);
+  test : (text) -> (HttpResponse);
 }

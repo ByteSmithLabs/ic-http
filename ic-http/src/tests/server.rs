@@ -4,7 +4,8 @@ use crate::Server;
 
 #[test]
 fn test_server_query_route_and_handle() {
-    let server = Server::new().query_route(&Method::GET, "/hello", |req, _params| {
+    let server = Server::new();
+    server.query_route(&Method::GET, "/hello", |req, _params| {
         HttpResponse::ok(
             b"Hello, World!",
             vec![("Content-Type".into(), "text/plain".into())],
@@ -27,7 +28,8 @@ fn test_server_query_route_and_handle() {
 
 #[test]
 fn test_server_query_route_not_found() {
-    let server = Server::new().query_route(&Method::GET, "/hello", |_, _| {
+    let server = Server::new();
+    server.query_route(&Method::GET, "/hello", |_, _| {
         HttpResponse::ok(b"Hello, World!", vec![]).build()
     });
 
@@ -46,11 +48,12 @@ fn test_server_query_custom_fallback() {
     use crate::RouteHandler;
     use ic_http_certification::HttpResponse;
     let custom_fallback: RouteHandler = |_, _| HttpResponse::ok(b"Custom Fallback", vec![]).build();
-    let server = Server::new()
-        .query_route(&Method::GET, "/hello", |_, _| {
-            HttpResponse::ok(b"Hello, World!", vec![]).build()
-        })
-        .with_fallback(custom_fallback);
+    let mut server = Server::new();
+
+    server.query_route(&Method::GET, "/hello", |_, _| {
+        HttpResponse::ok(b"Hello, World!", vec![]).build()
+    });
+    server.with_fallback(custom_fallback);
 
     let req = HttpRequest::builder()
         .with_method(Method::GET)
@@ -64,7 +67,8 @@ fn test_server_query_custom_fallback() {
 
 #[test]
 fn test_server_update_route_and_handle() {
-    let server = Server::new().update_route(&Method::POST, "/update", |req, _params| {
+    let server = Server::new();
+    server.update_route(&Method::POST, "/update", |req, _params| {
         HttpResponse::ok(
             b"Update OK!",
             vec![("Content-Type".into(), "text/plain".into())],
@@ -85,7 +89,8 @@ fn test_server_update_route_and_handle() {
 
 #[test]
 fn test_server_update_route_not_found() {
-    let server = Server::new().update_route(&Method::POST, "/update", |_, _| {
+    let server = Server::new();
+    server.update_route(&Method::POST, "/update", |_, _| {
         HttpResponse::ok(b"Update OK!", vec![]).build()
     });
 
@@ -104,11 +109,12 @@ fn test_server_update_custom_fallback() {
     use crate::RouteHandler;
     use ic_http_certification::HttpResponse;
     let custom_fallback: RouteHandler = |_, _| HttpResponse::ok(b"Update Fallback", vec![]).build();
-    let server = Server::new()
-        .update_route(&Method::POST, "/update", |_, _| {
-            HttpResponse::ok(b"Update OK!", vec![]).build()
-        })
-        .with_fallback(custom_fallback);
+    let mut server = Server::new();
+
+    server.update_route(&Method::POST, "/update", |_, _| {
+        HttpResponse::ok(b"Update OK!", vec![]).build()
+    });
+    server.with_fallback(custom_fallback);
 
     let req = HttpRequest::builder()
         .with_method(Method::POST)

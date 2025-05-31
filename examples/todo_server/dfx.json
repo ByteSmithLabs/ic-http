@@ -12,6 +12,23 @@
       "packtool": ""
     }
   },
+  "networks": {
+    "ic": {
+      "type": "persistent",
+      "providers": ["https://icp0.io"]
+    },
+    "test": {
+      "type": "persistent",
+      "providers": ["https://icp0.io"]
+    },
+    "local": {
+      "bind": "localhost:4943",
+      "type": "ephemeral",
+      "replica": {
+        "subnet_type": "system"
+      }
+    }
+  },
   "output_env_file": ".env",
   "version": 1
 }
