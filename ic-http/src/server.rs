@@ -10,8 +10,7 @@ use matchit::Router;
 #[derive(Clone)]
 pub struct Server {
     fallback: RouteHandler,
-    pub query_router: RefCell<HashMap<String, Router<RouteHandler>>>,
-    pub update_router: RefCell<HashMap<String, Router<RouteHandler>>>,
+    pub router: RefCell<HashMap<String, Router<RouteHandler>>>,
 }
 
 impl Server {
@@ -28,17 +27,13 @@ impl Server {
         }
         Self {
             fallback: default_fallback,
-            query_router: RefCell::new(HashMap::new()),
-            update_router: RefCell::new(HashMap::new()),
+            router: RefCell::new(HashMap::new()),
         }
     }
 
     pub fn config(&mut self, config_options: ServerConfig) {
-        if let Some(query_router) = config_options.query_router {
-            self.query_router = query_router;
-        }
-        if let Some(update_router) = config_options.update_router {
-            self.update_router = update_router;
+        if let Some(router) = config_options.router {
+            self.router = router;
         }
     }
 
@@ -49,7 +44,7 @@ impl Server {
 
     /// Register a query route
     pub fn query_route(&self, method: &Method, path: &str, handler: RouteHandler) -> () {
-        let mut routers = self.query_router.borrow_mut();
+        let mut routers = self.router.borrow_mut();
         let router = routers
             .entry(method.to_string())
             .or_insert_with(Router::new);
@@ -58,7 +53,7 @@ impl Server {
 
     /// Register an update route
     pub fn update_route(&self, method: &Method, path: &str, handler: RouteHandler) -> () {
-        let mut routers = self.update_router.borrow_mut();
+        let mut routers = self.router.borrow_mut();
         let router = routers
             .entry(method.to_string())
             .or_insert_with(Router::new);
@@ -69,14 +64,12 @@ impl Server {
         let req_path = req.get_path().expect("Failed to get req path");
         let method = req.method().as_str().to_uppercase();
 
-        let routers = self.query_router.borrow();
+        let routers = self.router.borrow();
         let maybe_router = routers.get(&method);
 
         if let Some(router) = maybe_router {
-            ic_cdk::println!("Query Router: {:?}", router);
             match router.at(&req_path) {
                 Ok(handler_match) => {
-                    ic_cdk::println!("Matched route: {}", req_path);
                     let handler = handler_match.value;
                     return handler(req, &handler_match.params);
                 }
@@ -92,14 +85,12 @@ impl Server {
         let req_path = req.get_path().expect("Failed to get req path");
         let method = req.method().as_str().to_uppercase();
 
-        let routers = self.update_router.borrow();
+        let routers = self.router.borrow();
         let maybe_router = routers.get(&method);
 
         if let Some(router) = maybe_router {
-            ic_cdk::println!("Update Router: {:?}", router);
             match router.at(&req_path) {
                 Ok(handler_match) => {
-                    ic_cdk::println!("Matched route: {}", req_path);
                     let handler = handler_match.value;
                     return handler(req, &handler_match.params);
                 }

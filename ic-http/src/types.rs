@@ -14,6 +14,5 @@ pub type RouteHandlerAsync =
     ) -> Pin<Box<dyn Future<Output = HttpResponse<'static>> + Send + 'a>>;
 
 pub struct ServerConfig {
-    pub query_router: Option<RefCell<HashMap<String, Router<RouteHandler>>>>,
-    pub update_router: Option<RefCell<HashMap<String, Router<RouteHandler>>>>,
+    pub router: Option<RefCell<HashMap<String, Router<RouteHandler>>>>,
 }

@@ -6,8 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 thread_local! {
-    static QUERY_ROUTER: RefCell<HashMap<String, Router<RouteHandler>>> = RefCell::new(HashMap::new());
-    static UPDATE_ROUTER: RefCell<HashMap<String, Router<RouteHandler>>> = RefCell::new(HashMap::new());
+    static ROUTER: RefCell<HashMap<String, Router<RouteHandler>>> = RefCell::new(HashMap::new());
 }
 
 // register handler modules
@@ -31,42 +30,38 @@ pub(crate) fn create_response(status_code: StatusCode, body: Vec<u8>) -> HttpRes
             ("pragma".to_string(), "no-cache".to_string()),
         ])
         .with_body(body)
+        .with_upgrade(true)
         .build()
 }
 
 fn define_routers() {
-    QUERY_ROUTER.with(|router_cell| {
+    ROUTER.with(|router_cell| {
         let mut routers = router_cell.borrow_mut();
-        let router = routers
+        // GET routes
+        let get_router = routers
             .entry(Method::GET.to_string())
             .or_insert_with(Router::new);
-
-        router.insert("/ping", handlers::ping).ok();
-        router.insert("/test", handlers::test).ok();
-        // Add more query routes here as needed
-    });
-
-    UPDATE_ROUTER.with(|router_cell| {
-        let mut routers = router_cell.borrow_mut();
-        let router = routers
+        get_router.insert("/ping", handlers::ping).ok();
+        get_router.insert("/test", handlers::test).ok();
+        // POST routes
+        let post_router = routers
             .entry(Method::POST.to_string())
             .or_insert_with(Router::new);
-        router.insert("/hello", handlers::hello).ok();
-        // Add more update routes here as needed
+        post_router.insert("/hello", handlers::hello).ok();
     });
 }
 
 #[ic_cdk::query]
 fn http_request(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let mut server = Server::new();
-
-    ic_cdk::println!("Received request: {:?}", req);
     server.config(ServerConfig {
-        query_router: Some(RefCell::new(
-            QUERY_ROUTER.with(|cell| cell.borrow().clone()),
-        )),
-        update_router: None,
+        router: Some(RefCell::new(ROUTER.with(|cell| cell.borrow().clone()))),
     });
+    // log request and current routes
+    ic_cdk::println!("Handling request: {:?}", req);
+    for router in server.router.borrow().values() {
+        ic_cdk::println!("Route group: {:?}", router);
+    }
     server.query_handle(&req)
 }
 
@@ -74,11 +69,37 @@ fn http_request(req: HttpRequest<'static>) -> HttpResponse<'static> {
 fn http_request_update(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let mut server = Server::new();
     server.config(ServerConfig {
-        query_router: None,
-        update_router: Some(RefCell::new(
-            UPDATE_ROUTER.with(|cell| cell.borrow().clone()),
-        )),
+        router: Some(RefCell::new(ROUTER.with(|cell| cell.borrow().clone()))),
     });
+
+    ic_cdk::println!("Handling update request: {:?}", req);
+
+    // log all route groups
+    for router in server.router.borrow().values() {
+        ic_cdk::println!("Route group: {:?}", router);
+    }
+
+    let req_path = req.get_path().expect("Failed to get req path");
+    let method = req.method().as_str().to_uppercase();
+    let routers = server.router.borrow();
+    let maybe_router = routers.get(&method);
+
+    if let Some(router) = maybe_router {
+        ic_cdk::println!("Found router for method: {}", method);
+        match router.at(&req_path) {
+            Ok(handler_match) => {
+                ic_cdk::println!("Matching route for path: {}", req_path);
+                let handler = handler_match.value;
+                return handler(&req, &handler_match.params);
+            }
+            Err(_) => {
+                ic_cdk::println!("No matching route for path: {}", req_path);
+            } // No matching route, fall through to fallback
+        }
+    } else {
+        ic_cdk::println!("No route matched, using fallback handler");
+    }
+
     server.update_handle(&req)
 }
 
@@ -90,16 +111,19 @@ fn test(url: String) -> HttpResponse<'static> {
         .with_url(url)
         .build();
 
+    ic_cdk::println!("Handling request: {:?}", req);
+
     server.config(ServerConfig {
-        query_router: Some(RefCell::new(
-            QUERY_ROUTER.with(|cell| cell.borrow().clone()),
-        )),
-        update_router: Some(RefCell::new(
-            UPDATE_ROUTER.with(|cell| cell.borrow().clone()),
-        )),
+        router: Some(RefCell::new(ROUTER.with(|cell| cell.borrow().clone()))),
     });
 
     let res = server.query_handle(&req);
+
+    ic_cdk::println!("Response Status: {}", res.status_code());
+
+    for router in server.router.borrow().values() {
+        ic_cdk::println!("Route group: {:?}", router);
+    }
 
     res
 }

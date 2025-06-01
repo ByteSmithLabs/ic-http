@@ -36,8 +36,20 @@ https://<CANISTER_ID>.icp0.io/hello
 
 ### Local endpoint
 
+`GET /ping`
+
 ```
 curl -s \
     "http://$(dfx canister id http_server).localhost:$(dfx info webserver-port)/ping" \
     --resolve "$(dfx canister id http_server).localhost:$(dfx info webserver-port):127.0.0.1"
+```
+
+`POST /hello`
+
+```
+curl -s -X POST \
+    "http://$(dfx canister id http_server).localhost:$(dfx info webserver-port)/hello" \
+    --resolve "$(dfx canister id http_server).localhost:$(dfx info webserver-port):127.0.0.1" \
+    -H "Content-Type: application/json" \
+    -d '{ "title": "Learn Motoko" }' | jq
 ```
