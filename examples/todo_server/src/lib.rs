@@ -1,12 +1,13 @@
+use handlers::ping;
 use ic_cdk::{init, post_upgrade, pre_upgrade};
-use ic_http::{HttpRequest, HttpResponse, RouteHandler, Server, ServerConfig};
-use ic_http_certification::{Method, StatusCode};
+use ic_http::{Handler, Server, ServerConfig};
+use ic_http_certification::{HttpRequest, HttpResponse, Method, StatusCode};
 use matchit::Router;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 thread_local! {
-    static ROUTER: RefCell<HashMap<String, Router<RouteHandler>>> = RefCell::new(HashMap::new());
+    static ROUTER: RefCell<HashMap<String, Router<Handler>>> = RefCell::new(HashMap::new());
 }
 
 // register handler modules
@@ -35,95 +36,59 @@ pub(crate) fn create_response(status_code: StatusCode, body: Vec<u8>) -> HttpRes
 }
 
 fn define_routers() {
-    ROUTER.with(|router_cell| {
-        let mut routers = router_cell.borrow_mut();
+    ROUTER.with_borrow_mut(|routers| {
         // GET routes
-        let get_router = routers
+        routers
             .entry(Method::GET.to_string())
-            .or_insert_with(Router::new);
-        get_router.insert("/ping", handlers::ping).ok();
-        get_router.insert("/test", handlers::test).ok();
+            .or_insert_with(Router::new)
+            .insert("/ping", Box::new(ping::PingHandler))
+            .ok();
+        routers
+            .get_mut(&Method::GET.to_string())
+            .unwrap()
+            .insert("/test", Box::new(handlers::test::TestHandler))
+            .ok();
         // POST routes
-        let post_router = routers
+        routers
             .entry(Method::POST.to_string())
-            .or_insert_with(Router::new);
-        post_router.insert("/hello", handlers::hello).ok();
+            .or_insert_with(Router::new)
+            .insert("/hello", Box::new(handlers::hello::HelloHandler))
+            .ok();
     });
 }
 
 #[ic_cdk::query]
-fn http_request(req: HttpRequest<'static>) -> HttpResponse<'static> {
+async fn http_request(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let mut server = Server::new();
-    server.config(ServerConfig {
-        router: Some(RefCell::new(ROUTER.with(|cell| cell.borrow().clone()))),
+    ROUTER.with(|router| {
+        server.config(ServerConfig { router: router });
     });
-    // log request and current routes
-    ic_cdk::println!("Handling request: {:?}", req);
-    for router in server.router.borrow().values() {
-        ic_cdk::println!("Route group: {:?}", router);
-    }
-    server.query_handle(&req)
+    server.handle(&req).await
 }
 
 #[ic_cdk::update]
-fn http_request_update(req: HttpRequest<'static>) -> HttpResponse<'static> {
+async fn http_request_update(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let mut server = Server::new();
-    server.config(ServerConfig {
-        router: Some(RefCell::new(ROUTER.with(|cell| cell.borrow().clone()))),
+
+    ROUTER.with(|router| {
+        server.config(ServerConfig { router: router });
     });
-
-    ic_cdk::println!("Handling update request: {:?}", req);
-
-    // log all route groups
-    for router in server.router.borrow().values() {
-        ic_cdk::println!("Route group: {:?}", router);
-    }
-
-    let req_path = req.get_path().expect("Failed to get req path");
-    let method = req.method().as_str().to_uppercase();
-    let routers = server.router.borrow();
-    let maybe_router = routers.get(&method);
-
-    if let Some(router) = maybe_router {
-        ic_cdk::println!("Found router for method: {}", method);
-        match router.at(&req_path) {
-            Ok(handler_match) => {
-                ic_cdk::println!("Matching route for path: {}", req_path);
-                let handler = handler_match.value;
-                return handler(&req, &handler_match.params);
-            }
-            Err(_) => {
-                ic_cdk::println!("No matching route for path: {}", req_path);
-            } // No matching route, fall through to fallback
-        }
-    } else {
-        ic_cdk::println!("No route matched, using fallback handler");
-    }
-
-    server.update_handle(&req)
+    server.handle(&req).await
 }
 
 #[ic_cdk::update]
-fn test(url: String) -> HttpResponse<'static> {
+async fn test(url: String) -> HttpResponse<'static> {
     let mut server = Server::new();
     let req = HttpRequest::builder()
         .with_method(Method::GET)
         .with_url(url)
         .build();
 
-    ic_cdk::println!("Handling request: {:?}", req);
-
-    server.config(ServerConfig {
-        router: Some(RefCell::new(ROUTER.with(|cell| cell.borrow().clone()))),
+    ROUTER.with(|router| {
+        server.config(ServerConfig { router: router });
     });
 
-    let res = server.query_handle(&req);
-
-    ic_cdk::println!("Response Status: {}", res.status_code());
-
-    for router in server.router.borrow().values() {
-        ic_cdk::println!("Route group: {:?}", router);
-    }
+    let res = server.handle(&req).await;
 
     res
 }

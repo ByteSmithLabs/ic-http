@@ -13,7 +13,9 @@ regex = "1.5"
 ic-http-certification = "3.0.3"
 ic-http-types = "0.1.0"
 matchit = "0.8.6"
+futures = "0.3"
 ic-cdk = "0.17.2"
+async-trait = "0.1.88"
 
 [dev-dependencies]
 async-trait = "0.1.88"

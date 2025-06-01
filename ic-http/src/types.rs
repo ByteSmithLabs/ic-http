@@ -1,18 +1,24 @@
-pub use ic_http_certification::{HttpRequest, HttpResponse, HttpResponseBuilder};
+use async_trait::async_trait;
+use ic_http_certification::{HttpRequest, HttpResponse};
 use matchit::{Params, Router};
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
+use std::{cell::RefCell, collections::HashMap};
 
-pub type RouteHandler = for<'a> fn(&'a HttpRequest, &'a Params) -> HttpResponse<'static>;
+#[async_trait]
+pub trait HandlerTrait {
+    async fn handle(&self, req: &HttpRequest, params: &Params) -> HttpResponse<'static>;
+    fn clone_box(&self) -> Box<dyn HandlerTrait + Send + Sync>;
+}
 
-pub type RouteHandlerAsync =
-    for<'a> fn(
-        &'a HttpRequest,
-        &'a Params,
-    ) -> Pin<Box<dyn Future<Output = HttpResponse<'static>> + Send + 'a>>;
+impl Clone for Box<dyn HandlerTrait + Send + Sync> {
+    fn clone(&self) -> Box<dyn HandlerTrait + Send + Sync> {
+        self.clone_box()
+    }
+}
 
-pub struct ServerConfig {
-    pub router: Option<RefCell<HashMap<String, Router<RouteHandler>>>>,
+pub type Handler = Box<dyn HandlerTrait + Send + Sync>;
+
+/// Server configuration struct
+#[derive(Clone)]
+pub struct ServerConfig<'a> {
+    pub router: &'a RefCell<HashMap<String, Router<Handler>>>,
 }

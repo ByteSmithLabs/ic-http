@@ -1,104 +1,78 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use ic_http_certification::{HttpRequest, HttpResponse, Method};
-use std::cell::RefCell;
 
-use crate::{RouteHandler, ServerConfig};
-
+use crate::HandlerTrait;
+use crate::{Handler, ServerConfig};
+use async_trait::async_trait;
+use matchit::Params;
 use matchit::Router;
 
-#[derive(Clone)]
+struct DefaultFallbackHandler;
+
+#[async_trait]
+impl HandlerTrait for DefaultFallbackHandler {
+    async fn handle(&self, _req: &HttpRequest, _params: &Params) -> HttpResponse<'static> {
+        HttpResponse::not_found(
+            b"Not Found!",
+            vec![("Content-Type".into(), "text/plain".into())],
+        )
+        .build()
+    }
+
+    fn clone_box(&self) -> Box<dyn HandlerTrait + Send + Sync> {
+        Box::new(DefaultFallbackHandler)
+    }
+}
+
 pub struct Server {
-    fallback: RouteHandler,
-    pub router: RefCell<HashMap<String, Router<RouteHandler>>>,
+    fallback: Handler,
+    pub routers: RefCell<HashMap<String, Router<Handler>>>,
+}
+
+#[async_trait]
+pub trait AsyncHandler: Send + Sync {
+    async fn handle(&self, req: &HttpRequest, params: &Params) -> HttpResponse<'static>;
 }
 
 impl Server {
     pub fn new() -> Self {
-        fn default_fallback(
-            _req: &HttpRequest,
-            _params: &matchit::Params,
-        ) -> HttpResponse<'static> {
-            HttpResponse::not_found(
-                b"Not Found!",
-                vec![("Content-Type".into(), "text/plain".into())],
-            )
-            .build()
-        }
         Self {
-            fallback: default_fallback,
-            router: RefCell::new(HashMap::new()),
+            fallback: Box::new(DefaultFallbackHandler),
+            routers: RefCell::new(HashMap::new()),
         }
     }
 
     pub fn config(&mut self, config_options: ServerConfig) {
-        if let Some(router) = config_options.router {
-            self.router = router;
-        }
+        self.routers = config_options.router.clone();
     }
 
-    /// Set a custom fallback handler
-    pub fn with_fallback(&mut self, handler: RouteHandler) -> () {
+    /// Set a custom fallback handler (must match async signature)
+    pub fn with_fallback(&mut self, handler: Handler) {
         self.fallback = handler;
     }
 
-    /// Register a query route
-    pub fn query_route(&self, method: &Method, path: &str, handler: RouteHandler) -> () {
-        let mut routers = self.router.borrow_mut();
+    /// Register a route for any HTTP method
+    pub fn route(&mut self, method: &Method, path: &str, handler: Handler) {
+        let mut routers = self.routers.borrow_mut(); // Borrow the HashMap mutably
         let router = routers
             .entry(method.to_string())
             .or_insert_with(Router::new);
         router.insert(path, handler).ok();
     }
 
-    /// Register an update route
-    pub fn update_route(&self, method: &Method, path: &str, handler: RouteHandler) -> () {
-        let mut routers = self.router.borrow_mut();
-        let router = routers
-            .entry(method.to_string())
-            .or_insert_with(Router::new);
-        router.insert(path, handler).ok();
-    }
-
-    pub fn query_handle(&self, req: &HttpRequest) -> HttpResponse<'static> {
+    pub async fn handle(&self, req: &HttpRequest<'static>) -> HttpResponse<'static> {
         let req_path = req.get_path().expect("Failed to get req path");
         let method = req.method().as_str().to_uppercase();
+        let routers = self.routers.borrow_mut(); // Borrow the HashMap mutably
 
-        let routers = self.router.borrow();
-        let maybe_router = routers.get(&method);
-
-        if let Some(router) = maybe_router {
-            match router.at(&req_path) {
-                Ok(handler_match) => {
-                    let handler = handler_match.value;
-                    return handler(req, &handler_match.params);
-                }
-                Err(_) => {} // No matching route, fall through to fallback
+        if let Some(router) = routers.get(&method) {
+            if let Ok(handler_match) = router.at(&req_path) {
+                return handler_match.value.handle(req, &handler_match.params).await;
             }
         }
-
         // Fallback handler if no route matched
-        (self.fallback)(req, &matchit::Params::new())
-    }
-
-    pub fn update_handle(&self, req: &HttpRequest) -> HttpResponse<'static> {
-        let req_path = req.get_path().expect("Failed to get req path");
-        let method = req.method().as_str().to_uppercase();
-
-        let routers = self.router.borrow();
-        let maybe_router = routers.get(&method);
-
-        if let Some(router) = maybe_router {
-            match router.at(&req_path) {
-                Ok(handler_match) => {
-                    let handler = handler_match.value;
-                    return handler(req, &handler_match.params);
-                }
-                Err(_) => {} // No matching route, fall through to fallback
-            }
-        }
-
-        // Fallback handler if no route matched
-        (self.fallback)(req, &matchit::Params::new())
+        self.fallback.handle(req, &Params::new()).await
     }
 }
