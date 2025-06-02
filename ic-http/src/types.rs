@@ -11,7 +11,7 @@ pub trait HandlerTrait {
 
 impl Clone for Box<dyn HandlerTrait + Send + Sync> {
     fn clone(&self) -> Box<dyn HandlerTrait + Send + Sync> {
-        self.clone_box()
+        Box::new(self.clone_box())
     }
 }
 
