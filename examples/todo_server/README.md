@@ -30,10 +30,6 @@ curl -X POST "https://<CANISTER_ID>.icp0.io/ping" \
   -d '{"key":"value"}'
 ```
 
-```
-https://<CANISTER_ID>.icp0.io/hello
-```
-
 ### Local endpoint
 
 `GET /ping`
@@ -41,7 +37,7 @@ https://<CANISTER_ID>.icp0.io/hello
 ```
 curl -s \
     "http://$(dfx canister id http_server).localhost:$(dfx info webserver-port)/ping" \
-    --resolve "$(dfx canister id http_server).localhost:$(dfx info webserver-port):127.0.0.1"
+    --resolve "$(dfx canister id http_server).localhost:$(dfx info webserver-port):127.0.0.1" |
 ```
 
 `POST /hello`
@@ -52,4 +48,10 @@ curl -s -X POST \
     --resolve "$(dfx canister id http_server).localhost:$(dfx info webserver-port):127.0.0.1" \
     -H "Content-Type: application/json" \
     -d '{ "title": "Learn Motoko" }' | jq
+```
+
+### Mainnet endpoint
+
+```
+curl -s https://5wbji-niaaa-aaaab-aaelq-cai.icp0.io/ping | jq
 ```
