@@ -51,7 +51,7 @@ impl Server {
             .expect("Failed to insert route into router");
     }
 
-    pub async fn handle(&self, req: HttpRequest<'static>) -> HttpResponse<'static> {
+    pub async fn handle(&self, req: &HttpRequest<'static>) -> HttpResponse<'static> {
         let req_path = req.get_path().expect("Failed to get req path");
         let method = req.method().as_str().to_uppercase();
 

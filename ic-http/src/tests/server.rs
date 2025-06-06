@@ -71,7 +71,7 @@ async fn test_server_get_route_and_handle() {
         .with_url("/hello")
         .build();
 
-    let res = server.handle(req).await;
+    let res = server.handle(&req).await;
     assert_eq!(res.status_code(), 200);
     assert_eq!(res.body(), b"Hello, World!");
 }
@@ -85,7 +85,7 @@ async fn test_server_post_route_and_handle() {
         .with_url("/update")
         .build();
 
-    let res = server.handle(req).await;
+    let res = server.handle(&req).await;
     println!("Response: {:?}", res);
     assert_eq!(res.status_code(), 200);
     assert_eq!(res.body(), b"Processed Update");
@@ -100,7 +100,7 @@ async fn test_server_route_not_found() {
         .with_url("/not-exist")
         .build();
 
-    let res = server.handle(req).await;
+    let res = server.handle(&req).await;
     assert_eq!(res.status_code(), 404);
     assert_eq!(res.body(), b"Custom Not Found");
 }
@@ -116,7 +116,7 @@ async fn test_server_custom_fallback() {
         .with_url("/not-exist")
         .build();
 
-    let res = server.handle(req).await;
+    let res = server.handle(&req).await;
     assert_eq!(res.status_code(), 404);
     assert_eq!(res.body(), b"Custom Not Found");
 }

@@ -35,14 +35,14 @@ fn define_server() -> Server {
 async fn http_request(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let server = define_server();
 
-    server.handle(req).await
+    server.handle(&req).await
 }
 
 #[ic_cdk::update]
 async fn http_request_update(req: HttpRequest<'static>) -> HttpResponse<'static> {
     let server = define_server();
 
-    server.handle(req).await
+    server.handle(&req).await
 }
 
 #[init]
