@@ -16,7 +16,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-ic-http = "0.1.0"
+ic-http = { git = "https://github.com/ByteSmithLabs/ic-http.git", branch = "main"}
 ```
 
 ## Quick Start
