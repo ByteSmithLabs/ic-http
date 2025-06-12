@@ -1,7 +1,7 @@
 [workspace]
 members = [ 
     "ic-http",
-    "examples/todo_server",
+    "examples/example_server",
 ]
 resolver = "2"
 

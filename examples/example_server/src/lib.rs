@@ -1,5 +1,5 @@
 use ic_cdk::{init, post_upgrade, pre_upgrade};
-use ic_http::server::{self, Server};
+use ic_http::server::Server;
 use ic_http_certification::{HttpRequest, HttpResponse, StatusCode};
 
 mod handlers;
@@ -25,7 +25,7 @@ fn define_server() -> Server {
         Box::pin(handlers::ping::handle_ping(req))
     });
     server.route("POST", "/ping", |req| {
-        Box::pin(handlers::test::handle_test(req))
+        Box::pin(handlers::hello::handle_hello(req))
     });
 
     server

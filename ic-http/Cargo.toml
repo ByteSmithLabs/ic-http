@@ -3,7 +3,8 @@ name = "ic-http"
 version = "0.1.0"
 edition = "2021"
 authors = ["Long Tran <tranbaolong14@gmail.com>"]
-description = "A library with built-in documentation for common operations"
+description = "A lightweight HTTP server library designed for Internet Computer (IC) canisters"
+license = "MIT"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

@@ -1,14 +1,14 @@
 # ic-http
 
-A Rust HTTP library with built-in documentation for common operations and a flexible HTTP server framework.
+A lightweight Rust HTTP server library designed for Internet Computer (IC) canisters with built-in routing and request handling capabilities.
 
 ## Features
 
-- Simple HTTP server implementation with Express.js/Axum-like API
-- Routing system for HTTP requests (GET, POST, PUT, DELETE, etc.)
-- Request and Response abstractions
-- JSON support for requests and responses
-- Comprehensive documentation
+- Simple HTTP server implementation optimized for IC canisters
+- Flexible routing system supporting all standard HTTP methods
+- Path-based request routing with fallback handling
+- Built on `ic-http-certification` for IC compatibility
+- Async request handling with futures support
 
 ## Installation
 
@@ -19,187 +19,205 @@ Add this to your `Cargo.toml`:
 ic-http = "0.1.0"
 ```
 
-## HTTP Server Usage
+## Quick Start
 
 ```rust
-use ic_http::{SimpleHttpServer, HttpServer, Request, Response};
-use std::collections::HashMap;
+use ic_http::{Server, Handler};
+use ic_http_certification::{HttpRequest, HttpResponse};
+use std::pin::Pin;
+use std::future::Future;
 
-fn main() {
-    // Create a new HTTP server
-    let mut server = SimpleHttpServer::new();
+// Create a new server
+let mut server = Server::new();
 
-    // Register routes
-    server.get("/hello", |_req| {
-        Box::pin(async move {
-            Response::text("Hello, World!", 200)
-        })
-    });
+// Define a handler function
+let hello_handler: Handler = |_req: &HttpRequest<'static>| {
+    Box::pin(async {
+        HttpResponse::ok(
+            b"Hello, World!",
+            vec![("Content-Type".into(), "text/plain".into())],
+        )
+        .build()
+    })
+};
 
-    server.post("/api/users", |req| {
-        Box::pin(async move {
-            match req.json::<serde_json::Value>() {
-                Ok(json) => Response::json(&json, 201).unwrap_or_else(|_| {
-                    Response::text("Error creating JSON response", 500)
-                }),
-                Err(_) => Response::text("Invalid JSON", 400),
-            }
-        })
-    });
+// Register routes
+server.route("GET", "/hello", hello_handler);
 
-    // Example of handling a request
-    let request = Request::new(
-        ic_http::Method::GET,
-        "/hello".to_string(),
-        HashMap::new(),
-        Vec::new()
-    );
+// Handle incoming requests
+let response = server.handle(&request).await;
+```
 
-    // In a real application, you would run this in an async runtime
-    let future_response = server.handle_request(request);
+## Multiple Routes Example
 
-    // ...
+```rust
+use ic_http::{Server, Handler};
+use ic_http_certification::{HttpRequest, HttpResponse};
+
+let mut server = Server::new();
+
+// GET route
+let get_users: Handler = |_req| {
+    Box::pin(async {
+        HttpResponse::ok(
+            b"[{\"id\": 1, \"name\": \"Alice\"}]",
+            vec![("Content-Type".into(), "application/json".into())],
+        )
+        .build()
+    })
+};
+
+// POST route
+let create_user: Handler = |_req| {
+    Box::pin(async {
+        HttpResponse::ok(
+            b"{\"id\": 2, \"name\": \"Bob\"}",
+            vec![("Content-Type".into(), "application/json".into())],
+        )
+        .build()
+    })
+};
+
+// Register routes
+server.route("GET", "/users", get_users);
+server.route("POST", "/users", create_user);
+
+// Custom fallback for unmatched routes
+server.with_fallback(|_req| {
+    Box::pin(async {
+        HttpResponse::not_found(
+            b"Custom 404 - Route not found",
+            vec![("Content-Type".into(), "text/plain".into())],
+        )
+        .build()
+    })
+});
+```
+
+## API Overview
+
+### Server
+
+The main `Server` struct provides the core functionality:
+
+```rust
+impl Server {
+    // Create a new server instance
+    pub fn new() -> Self;
+
+    // Register a route with method, path, and handler
+    pub fn route(&mut self, method: &str, path: &str, handler: Handler);
+
+    // Set a custom fallback handler for unmatched routes
+    pub fn with_fallback(&mut self, handler: Handler);
+
+    // Handle an incoming HTTP request
+    pub async fn handle(&self, req: &HttpRequest<'static>) -> HttpResponse<'static>;
+
+    // Check if a string is a valid HTTP method
+    pub fn is_http_method(method: &str) -> bool;
 }
 ```
 
-## Router Usage
+### Handler Type
 
-You can use the built-in `Router` to register exact and prefix-based routes in your canister.
+Handlers are async functions that process requests:
 
 ```rust
-use ic_http::{Router};
-use ic_http::{HttpRequest, HttpResponse};
+pub type Handler = for<'a> fn(
+    &'a HttpRequest<'static>,
+) -> Pin<Box<dyn Future<Output = HttpResponse<'static>> + 'a>>;
+```
 
-// Example handler functions
-fn handle_hello(req: HttpRequest) -> HttpResponse {
-    HttpResponseBuilder::ok()
-        .header("Content-Type", "text/plain")
-        .body("Hello, World!")
-        .build()
+### Supported HTTP Methods
+
+The server supports all standard HTTP methods:
+
+- GET, POST, PUT, DELETE
+- PATCH, OPTIONS, HEAD
+- TRACE, CONNECT
+
+## Usage in IC Canisters
+
+Here's how to integrate the HTTP server into an Internet Computer canister:
+
+```rust
+use ic_cdk::query;
+use ic_http::{Server, Handler};
+use ic_http_certification::{HttpRequest, HttpResponse};
+use std::cell::RefCell;
+
+thread_local! {
+    static HTTP_SERVER: RefCell<Server> = RefCell::new({
+        let mut server = Server::new();
+
+        let health_check: Handler = |_req| {
+            Box::pin(async {
+                HttpResponse::ok(
+                    b"OK",
+                    vec![("Content-Type".into(), "text/plain".into())],
+                )
+                .build()
+            })
+        };
+
+        server.route("GET", "/health", health_check);
+        server
+    });
 }
 
-fn handle_api(req: HttpRequest) -> HttpResponse {
-    // handle all paths under /api
-    HttpResponseBuilder::ok()
-        .header("Content-Type", "application/json")
-        .body("{ \"api\": true }")
-        .build()
-}
-
-// Create a router and register routes
-let router = Router::new()
-    .route("/hello", handle_hello)       // exact match
-    .prefix("/api", handle_api);         // prefix match
-
-// Dispatch requests
 #[query]
-fn http_request(req: HttpRequest) -> HttpResponse {
-    router.handle_request(req)
+async fn http_request(req: HttpRequest) -> HttpResponse {
+    HTTP_SERVER.with(|server| {
+        let server = server.borrow();
+        server.handle(&req)
+    }).await
 }
 ```
 
-This will dispatch `/hello` to `handle_hello` and any path starting with `/api` to `handle_api`. If no route matches, a 404 Not Found response is returned.
+## Development
 
-## Components
-
-### HttpServer Trait
-
-The core of the library is the `HttpServer` trait that provides a simple and intuitive API for handling HTTP requests:
-
-```rust
-pub trait HttpServer {
-    fn route(&mut self, method: Method, path: &str, handler: HandlerFn);
-    fn get(&mut self, path: &str, handler: HandlerFn);
-    fn post(&mut self, path: &str, handler: HandlerFn);
-    fn put(&mut self, path: &str, handler: HandlerFn);
-    fn delete(&mut self, path: &str, handler: HandlerFn);
-    fn handle_request(&self, request: Request) -> Pin<Box<dyn Future<Output = Response> + Send>>;
-}
-```
-
-### Request and Response
-
-The library provides convenient abstractions for HTTP requests and responses:
-
-```rust
-// Create a request
-let request = Request::new(
-    Method::POST,
-    "/api/data".to_string(),
-    headers,
-    body
-);
-
-// Parse request body as JSON
-let data: MyStruct = request.json()?;
-
-// Create responses
-let text_response = Response::text("Hello, World!", 200);
-let json_response = Response::json(&my_data, 200)?;
-```
-
-## Examples
-
-The library comes with several examples in the `examples` directory:
-
-- **HTTP Server**: Example showing how to create a simple HTTP server
-
-  ```
-  cargo run --example http_server
-  ```
-
-## API Documentation
-
-### Types
-
-- `Method`: HTTP method enum (GET, POST, PUT, DELETE, etc.)
-- `Route`: Structure representing a route with path, method, and handler
-- `Request`: Structure representing an HTTP request
-- `Response`: Structure representing an HTTP response
-- `SimpleHttpServer`: A basic implementation of the HttpServer trait
-
-### Request Methods
-
-- `new()`: Create a new request
-- `json<T>()`: Parse the request body as JSON
-- `get_header()`: Get a specific header value
-
-### Response Methods
-
-- `new()`: Create a new response
-- `json<T>()`: Create a JSON response
-- `text()`: Create a text response
-
-### Server Methods
-
-- `new()`: Create a new server instance
-- `route()`: Register a route with a method, path, and handler
-- `get()`, `post()`, `put()`, `delete()`: Convenience methods for registering routes
-- `handle_request()`: Process a request and return a response
-
-## Documentation
-
-To view the documentation locally:
+### Building
 
 ```sh
-cargo doc --open
+cargo build
 ```
 
-This will build the documentation and open it in your default web browser.
-
-## Testing
-
-Run the tests with:
+### Testing
 
 ```sh
 cargo test
 ```
 
+### Documentation
+
+Generate and view the documentation:
+
+```sh
+cargo doc --open
+```
+
+## Dependencies
+
+This library builds on several key dependencies:
+
+- `ic-http-certification`: IC-specific HTTP types and certification
+- `matchit`: Fast path-based router
+- `serde`: Serialization framework
+- `futures`: Async programming utilities
+
+## Examples
+
+Check out the `examples/` directory in the repository for complete working examples, including:
+
+- Basic HTTP server setup
+- IC canister integration
+- Custom route handlers
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
 ## License
 
-This project is licensed under either of:
-
-- MIT License
-- Apache License, Version 2.0
-
-at your option.
+This project is licensed under MIT License
